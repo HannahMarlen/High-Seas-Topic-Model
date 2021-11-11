@@ -1,0 +1,170 @@
+# Finale OoooHHHhhh
+
+# Topic Model about the Future of the High Seas
+
+library(quanteda)
+library(tidyverse)
+library(tidytext)
+library(tm)
+library(topicmodels)
+library(readxl)
+library(ggplot2)
+
+# Loading the Data 
+
+Scopus_Titles_Abstracts <- read_excel("Scopus_Abstract_Data/Scopus_Titles_Abstracts.xlsx")
+View(Scopus_Titles_Abstracts)
+
+# Tidying the Data
+
+unnest(small_dataset, cols = c(1,2))
+
+too_words <- tibble(
+  word = c("paper", "study","aim","elsevier", "author")
+)
+
+tidy_abstracts <- small_dataset %>%
+  unnest_tokens(word, 2) %>%
+  anti_join(stop_words) %>%
+  anti_join(too_words) %>%
+  filter(word != "abstract")
+
+
+tidy_abstracts %>%
+  count(word, sort = TRUE)
+
+# Calculating the Frequency of Terms (tdf_idf)
+
+x <- tidy_abstracts %>%
+  count(Title, word, sort = TRUE) %>%
+  bind_tf_idf(word, Title, n) %>%
+  arrange(-tf_idf) %>%
+  group_by(Title) %>%
+  top_n(3)
+
+
+# Creating the Document Term Matrix
+
+dtm <- tidy_abstracts %>% 
+  select(Abstract, Title) %>%
+  unique() %>% 
+  unnest_tokens(word, Abstract) %>% 
+  anti_join(stop_words) %>% 
+  anti_join(too_words) %>%
+  filter(!str_detect(word, "[:digit:]")) %>%
+  mutate(word = textstem::lemmatize_words(word)) %>% 
+  group_by(Title) %>%
+  count(word, sort = TRUE) %>%
+  cast_dtm(document = Title, term = word, value = n)
+
+save(dtm, file = "High-Seas-Topic-Model")
+
+# Calculating the best fitting Algorithm (It's Gibbs!)
+
+SEED <- 2010
+k <- 15
+
+tset.TM1 <- list (
+  VEM0 = LDA(dtm, k=k, control = list ( seed = SEED)),
+  VEM_fixed= LDA(dtm, k=k, control= list (estimate.alpha = F, seed = SEED)),
+  Gibbs = LDA (dtm, k=k, method ="Gibbs", control = list (seed = SEED, burnin= 10, thin = 10, iter= 10)),
+  CTM = CTM (dtm, k=k, control = list(seed = SEED, var= list (tol= 10^-4), em= list (tol = 10^-3))))
+
+sapply (tset.TM1[1:3], slot, "alpha")
+
+
+#Finding number of topics
+
+k <- c(5,10,25,50,100)
+
+topicNumber.TM <- map(
+  .x = k,
+  .f = function(x) {
+    LDA(dtm, k = x, control= list (seed = SEED), method = "Gibbs")
+  })
+save(tset.TM, topicNumber.TM, file = "High-Seas_Topic-Model")
+
+
+#This shows 10 topics and their x keywords
+
+TermsA <- terms(tset.TM[["Gibbs"]], 10)
+
+Terms1 <- terms(tset.TM[["Gibbs"]], 8)
+
+Terms2 <- terms(tset.TM[["Gibbs"]], 30)
+
+
+
+#To save and load all objects in the environment
+
+save.image(file='myEnvironmentwithtopics.RData')
+load('myEnvironment.RData')
+
+# Visualising potential results/ Intertopic Distance Map
+
+library(LDAvis)
+library(servr)
+
+#create a matrix from the dtm
+
+m <- as.matrix(dtm) 
+z <- rowSums(m>0) 
+
+# First option to create a JSON object
+
+slotNames(topicNumber.TM[[2]])
+slot(topicNumber.TM[[2]], "gamma") 
+
+theta <- slot(topicNumber.TM[[2]], "gamma")
+phi <- slot(topicNumber.TM[[2]], "beta")
+doc.length <- z
+vocab <- slot(topicNumber.TM[[2]], "terms")
+term.frequency <- x[[4]]    
+
+json <- createJSON(phi = (phi), theta = (theta), doc.length = (doc.length),
+                   vocab = (vocab), term.frequency = (term.frequency), R = 30,
+                   lambda.step = 0.01, mds.method = jsPCA, cluster, plot.opts = list(xlab =
+                                                                                       "PC1", ylab = "PC2"))
+
+
+# Second option to create JSON object
+
+dt <- dim(theta)    
+dp <- dim(phi)
+
+N <- sum(doc.length)  # number of tokens in the data
+W <- length(vocab)  # number of terms in the vocab
+D <- length(doc.length)  # number of documents in the data
+K <- dt[2]  # number of topics in the model
+
+topic.frequency <- colSums(theta * doc.length)
+topic.proportion <- topic.frequency/sum(topic.frequency)
+
+term.topic.frequency <- phi * topic.frequency 
+
+term.frequency <- colSums(term.topic.frequency)
+stopifnot(all(term.frequency > 0))   # Error Message
+
+json <- createJSON(phi = (phi), theta = (theta), doc.length = (doc.length),
+                   vocab = (vocab), term.frequency = (term.frequency), R = 30,
+                   lambda.step = 0.01, mds.method = jsPCA, cluster, plot.opts = list(xlab =
+                                                                                       "PC1", ylab = "PC2"))
+
+
+# Third option to create JSON object
+
+topicmodels2LDAvis <- function(x, ...){
+  post <- topicmodels::posterior(x)
+  if (ncol(post[["topics"]]) < 3) stop("The model must contain > 2 topics")
+  mat <- x@wordassignments
+  LDAvis::createJSON(
+    phi = post[["terms"]], 
+    theta = post[["topics"]],
+    vocab = colnames(post[["terms"]]),
+    doc.length = slam::row_sums(mat, na.rm = TRUE),
+    term.frequency = slam::col_sums(mat, na.rm = TRUE)
+  )
+}
+
+result <- topicNumber.TM[[4]]
+serVis(topicmodels2LDAvis(result))
