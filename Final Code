@@ -84,6 +84,19 @@ topicNumber.TM <- map(
   })
 save(tset.TM, topicNumber.TM, file = "High-Seas_Topic-Model")
 
+## This gets you the table with the entropy, perplexity, loglik scores
+
+df_topic_number <- tibble(
+  topic_number = k,
+  entropy = map_dbl (topicNumber.TM, function (x)
+    mean(apply(posterior(x)$topics, 1, function (z) - sum(z * log(z)))) # maximize Entropy
+  ),
+  alpha = map_dbl(topicNumber.TM, slot, "alpha"),
+  log_lik = map_dbl(topicNumber.TM, logLik) #,  #maximize loglik
+  #perplexity = map_dbl(topicNumber.TM, perplexity) #minimize perplexity
+)
+
+
 
 #This shows 10 topics and their x keywords
 
@@ -151,7 +164,7 @@ json <- createJSON(phi = (phi), theta = (theta), doc.length = (doc.length),
                                                                                        "PC1", ylab = "PC2"))
 
 
-# Third option to create JSON object
+# Create JSON object/ Visualize your results
 
 topicmodels2LDAvis <- function(x, ...){
   post <- topicmodels::posterior(x)
