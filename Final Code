@@ -73,6 +73,22 @@ tset.TM1 <- list (
 sapply (tset.TM1[1:3], slot, "alpha")
 
 
+# To get the table with the stats
+
+df_stats <- tibble(
+  model = names(lapply(tset.TM1, logLik)),
+  loglik = as.numeric(lapply(tset.TM1, logLik)), #maximize loglik
+  entropy = lapply (tset.TM1, function (x) 
+    mean(apply(posterior(x)$topics,
+               1, function (z) - sum(z * log(z))))) %>% as.numeric()#maximize ENTROPY
+  
+)
+
+
+perp <-  lapply(tset.TM1[c(1,2,4)], perplexity) #maximize perplexity
+
+
+
 #Finding number of topics
 
 k <- c(5,10,25,50,100)
