@@ -1,8 +1,5 @@
-# Finale OoooHHHhhh
-
 # Topic Model about the Future of the High Seas
 
-library(quanteda)
 library(tidyverse)
 library(tidytext)
 library(tm)
@@ -17,13 +14,13 @@ View(Scopus_Titles_Abstracts)
 
 # Tidying the Data
 
-unnest(small_dataset, cols = c(1,2))
+unnest(Scopus_Titles_Abstracts, cols = c(1,2))
 
 too_words <- tibble(
-  word = c("paper", "study","aim","elsevier", "author")
+  word = c("paper", "study","aim","Elsevier", "author", "abstract")
 )
 
-tidy_abstracts <- small_dataset %>%
+tidy_abstracts <- Scopus_Titles_Abstracts %>%
   unnest_tokens(word, 2) %>%
   anti_join(stop_words) %>%
   anti_join(too_words) %>%
@@ -85,20 +82,21 @@ df_stats <- tibble(
 )
 
 
-perp <-  lapply(tset.TM1[c(1,2,4)], perplexity) #maximize perplexity
+perp <-  lapply(tset.TM1[c(1,2,4)], perplexity) #maximize perplexity// Gibbs does not have perplexity though
 
 
 
 #Finding number of topics
 
-k <- c(5,10,25,50,100)
+k <- c(5,10,25,50,100)  #I tried almost every conceivable topic number, check in the end which k I used
 
 topicNumber.TM <- map(
   .x = k,
   .f = function(x) {
     LDA(dtm, k = x, control= list (seed = SEED), method = "Gibbs")
   })
-save(tset.TM, topicNumber.TM, file = "High-Seas_Topic-Model")
+
+save(tset.TM1, topicNumber.TM, file = "High-Seas_Topic-Model")
 
 ## This gets you the table with the entropy, perplexity, loglik scores
 
@@ -109,24 +107,20 @@ df_topic_number <- tibble(
   ),
   alpha = map_dbl(topicNumber.TM, slot, "alpha"),
   log_lik = map_dbl(topicNumber.TM, logLik) #,  #maximize loglik
-  #perplexity = map_dbl(topicNumber.TM, perplexity) #minimize perplexity
+  #perplexity = map_dbl(topicNumber.TM, perplexity) #minimize perplexity //again, does not work for Gibbs
 )
 
 
 
-#This shows 10 topics and their x keywords
+#This shows x topics and their x keywords
 
-TermsA <- terms(tset.TM[["Gibbs"]], 10)
-
-Terms1 <- terms(tset.TM[["Gibbs"]], 8)
-
-Terms2 <- terms(tset.TM[["Gibbs"]], 30)
+Terms1 <- terms(tset.TM1[["Gibbs"]], 10)
 
 
 
 #To save and load all objects in the environment
 
-save.image(file='myEnvironmentwithtopics.RData')
+save.image(file='myEnvironmen.RData')
 load('myEnvironment.RData')
 
 # Visualising potential results/ Intertopic Distance Map
@@ -139,7 +133,7 @@ library(servr)
 m <- as.matrix(dtm) 
 z <- rowSums(m>0) 
 
-# First option to create a JSON object
+# First option to create a JSON object - does not work
 
 slotNames(topicNumber.TM[[2]])
 slot(topicNumber.TM[[2]], "gamma") 
@@ -156,7 +150,7 @@ json <- createJSON(phi = (phi), theta = (theta), doc.length = (doc.length),
                                                                                        "PC1", ylab = "PC2"))
 
 
-# Second option to create JSON object
+# Second option to create JSON object - does not work either
 
 dt <- dim(theta)    
 dp <- dim(phi)
@@ -180,7 +174,7 @@ json <- createJSON(phi = (phi), theta = (theta), doc.length = (doc.length),
                                                                                        "PC1", ylab = "PC2"))
 
 
-# Create JSON object/ Visualize your results
+# Create JSON object (third option works!) / Visualize your results
 
 topicmodels2LDAvis <- function(x, ...){
   post <- topicmodels::posterior(x)
