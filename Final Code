@@ -16,16 +16,10 @@ View(Scopus_Titles_Abstracts)
 
 unnest(Scopus_Titles_Abstracts, cols = c(1,2))
 
-too_words <- tibble(
-  word = c("paper", "study","aim","Elsevier", "author", "abstract")
-)
-
 tidy_abstracts <- Scopus_Titles_Abstracts %>%
   unnest_tokens(word, 2) %>%
   anti_join(stop_words) %>%
-  anti_join(too_words) %>%
   filter(word != "abstract")
-
 
 tidy_abstracts %>%
   count(word, sort = TRUE)
@@ -47,7 +41,6 @@ dtm <- tidy_abstracts %>%
   unique() %>% 
   unnest_tokens(word, Abstract) %>% 
   anti_join(stop_words) %>% 
-  anti_join(too_words) %>%
   filter(!str_detect(word, "[:digit:]")) %>%
   mutate(word = textstem::lemmatize_words(word)) %>% 
   group_by(Title) %>%
@@ -111,12 +104,22 @@ df_topic_number <- tibble(
 )
 
 
+# This shows the graph with these values
+
+g2 <- df_topic_number %>%
+    # mutate(alpha_log = log10(alpha)) %>%
+    pivot_longer(cols = 2:last_col(), names_to = "measure", values_to = "value") %>%
+    # filter(measure != "alpha") %>%
+    ggplot(aes(as.factor(topic_number), value)) +
+    geom_col() + 
+    # scale_y_continuous(labels = scales::label_scientific) +
+    labs(x = "Number of topics", y = "Value", tag = "B") +
+    facet_wrap(.~measure, scales = "free", ncol = 4, nrow = 1) +
+    theme_light(base_size = 8)
 
 #This shows x topics and their x keywords
 
 Terms1 <- terms(tset.TM1[["Gibbs"]], 10)
-
-
 
 #To save and load all objects in the environment
 
